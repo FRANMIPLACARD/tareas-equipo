@@ -881,9 +881,9 @@ function getWeekStatus(w){
     days.forEach(di=>{
       if(di===6) return;
       total++;
-      // check assignment specifically for this week
       const weekAssign = bs().assign[w]?.[di]?.[t.id]||'';
-      const av = r?.newMember || weekAssign || '';
+      const configAssign = t.dayMembers?.[di]||'';
+      const av = r?.newMember || weekAssign || configAssign || '';
       if(av) assigned++;
     });
   });
