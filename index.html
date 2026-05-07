@@ -726,24 +726,35 @@ async function loadState(){
 }
 
 function save(){
+  isSavingNow=true;
   try{ localStorage.setItem('sv_state',JSON.stringify(G)); }catch(e){}
   if(saveTimer) clearTimeout(saveTimer);
   saveTimer=setTimeout(async()=>{
     try{ await db.collection('state').doc('main').set({state:G}); }catch(e){ console.error(e); }
-  },800);
+    saveTimer=null;
+    // Allow receiving updates after short delay
+    setTimeout(()=>{ isSavingNow=false; },500);
+  },500);
 }
 
 // Real-time listener
+let isSavingNow=false;
 db.collection('state').doc('main').onSnapshot(snap=>{
   if(!snap.exists||!snap.data().state) return;
-  if(saveTimer) return; // skip if we're saving
-  G=snap.data().state;
+  if(isSavingNow) return;
+  const newState=snap.data().state;
+  // Check if data actually changed before updating
+  if(JSON.stringify(newState)===JSON.stringify(G)) return;
+  G=newState;
   for(let i=0;i<6;i++) ensureDefaults(i);
   localStorage.setItem('sv_state',JSON.stringify(G));
+  buildWeekTabs();
   syncUI();
 });
 
 function syncUI(){
+  if(!currentRole) return; // not logged in
+  buildWeekTabs();
   if(document.getElementById('view-board')?.classList.contains('active')) renderBoard();
   if(document.getElementById('view-today')?.classList.contains('active')) renderDayView();
   if(document.getElementById('screen-home')?.classList.contains('active')) renderHome();
@@ -973,7 +984,7 @@ function renderDayView(){
     sorted.forEach(t=>{
       const r=reschedules[t.id];
       const lookupDay=r?r.newDay:todayDi;
-      const av=r?.newMember||getAssign(w,lookupDay,t.id)||'';
+      const av=r?.newMember||getAssign(w,lookupDay,t.id)||t.dayMembers?.[lookupDay]||t.dayMembers?.[todayDi]||'';
       const isDone=getDone(w,todayDi,t.id);
       const timeVal=getTime(t.id,todayDi);
       const isR=!!r;
@@ -1164,7 +1175,7 @@ function renderBoard(){
       : sorted.map(t=>{
           const r=reschedules[t.id];
           const lookupDay=r?r.newDay:di;
-          const av=r?.newMember||getAssign(w,lookupDay,t.id)||'';
+          const av=r?.newMember||getAssign(w,lookupDay,t.id)||t.dayMembers?.[lookupDay]||t.dayMembers?.[di]||'';
           const memberObj=members.find(m=>m.name===av);
           const mColor=members.findIndex(m=>m.name===av) >= 0 ? COLORS[members.findIndex(m=>m.name===av)%COLORS.length]:'#aaa';
           const isDone=getDone(w,di,t.id);
@@ -1270,6 +1281,9 @@ function setFilter(f){ trelloFilter=f; renderBoard(); }
 
 function changeCardMember(w,di,tid,v){
   setAssign(w,di,tid,v);
+  // also save as dayMember so it shows as default in other weeks
+  const t=bs().tasks.find(t=>t.id===tid);
+  if(t){ if(!t.dayMembers) t.dayMembers={}; t.dayMembers[di]=v; }
   save();
   buildWeekTabs();
   renderBoard();
@@ -1281,18 +1295,14 @@ function setNotDone(w,di,tid,v){ (bs().done[w]=bs().done[w]||{}); (bs().done[w][
 function handleStatusDone(w,di,tid,card){
   const isDone=getDone(w,di,tid);
   if(isDone){
-    // uncheck
     setDone(w,di,tid,false);
   } else {
     setDone(w,di,tid,true);
-    setNotDone(w,di,tid,false); // clear not-done
+    setNotDone(w,di,tid,false);
   }
-  // re-render card status
-  const doneRow=card.querySelector('.status-row:nth-child(1)');
-  const noRow=card.querySelector('.status-row:nth-child(2)');
-  if(doneRow) doneRow.classList.toggle('checked-done',getDone(w,di,tid));
-  if(noRow) noRow.classList.remove('checked-no');
-  card.classList.toggle('done-card',getDone(w,di,tid));
+  // re-render fully so all sessions stay in sync
+  renderBoard();
+  if(document.getElementById('view-today')?.classList.contains('active')) renderDayView();
 }
 
 function handleStatusNo(w,di,tid,taskName,card){
