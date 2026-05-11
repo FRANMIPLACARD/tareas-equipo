@@ -694,7 +694,7 @@ function ensureDefaults(i){
 }
 
 // ── Helpers ──
-function getAssign(w,d,tid){ return bs().assign[w]?.[d]?.[tid]||''; }
+function getAssign(w,d,tid){ return bs().assign[w]?.[d]?.[tid]||bs().assign[0]?.[d]?.[tid]||''; }
 function setAssign(w,d,tid,v){ (bs().assign[w]=bs().assign[w]||{}); (bs().assign[w][d]=bs().assign[w][d]||{}); bs().assign[w][d][tid]=v; save(); }
 function getDone(w,d,tid){ return !!(bs().done[w]?.[d]?.['t_'+tid]); }
 function setDone(w,d,tid,v){ (bs().done[w]=bs().done[w]||{}); (bs().done[w][d]=bs().done[w][d]||{}); bs().done[w][d]['t_'+tid]=v; save(); }
